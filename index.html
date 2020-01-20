@@ -1,0 +1,583 @@
+<!doctype html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<title>Tetris World</title>
+</head>
+<style>
+	* {
+		padding: 0;
+		margin: 0
+	}
+</style>
+<script src="pixi/pixi.min.js"></script>
+
+<body>
+	<script>
+		//Aliases
+		let Application = PIXI.Application,
+			Container = PIXI.Container,
+			loader = PIXI.loader,
+			resources = PIXI.loader.resources,
+			Graphics = PIXI.Graphics,
+			TextureCache = PIXI.utils.TextureCache,
+			Sprite = PIXI.Sprite,
+			Text = PIXI.Text,
+			TextStyle = PIXI.TextStyle,
+			Point = PIXI.Point;
+
+		//Create a Pixi Application
+		let app = new Application({
+			width: 256,         // default: 800
+			height: 256,        // default: 600
+			antialias: true,    // default: false
+			transparent: false, // default: false
+			resolution: 1       // default: 1
+		}
+		);
+		app.renderer.view.style.position = "absolute";
+		app.renderer.view.style.display = "block";
+		app.renderer.autoResize = true;
+		app.renderer.resize(window.innerWidth, window.innerHeight);
+		app.renderer.backgroundColor = 0x061639;
+		document.body.appendChild(app.view);
+
+		class Brick {
+			position;
+			size;
+			color;
+			graphics;
+
+			constructor(position, size, color) {
+				this.position = position;
+				this.size = size;
+				this.color = color;
+				this.createGraphics();
+				brickLayer.addChild(this.graphics);
+			}
+
+			createGraphics() {
+				this.graphics = new Graphics();
+				this.graphics.beginFill(this.color);
+				this.graphics.lineStyle(1, 0x000000, 1);
+				this.graphics.drawRect(0, 0, this.size.x, this.size.y);
+				this.graphics.endFill();
+				this.graphics.position = this.position;
+			}
+
+			setPosition(position) {
+				this.position = position;
+				this.graphics.position = this.position;
+			}
+
+			destroy() {
+				this.graphics.destroy();
+			}
+		}
+
+		class Tetris {
+			bricks;
+			bricksLocation;
+			type;
+			rotation;
+			gridSystem;
+
+			constructor(type, location, gridSystem) {
+				this.type = type;
+				this.gridSystem = gridSystem;
+				this.rotation = 0;
+				this.bricks = new Array(0);
+				this.bricksLocation = new Array(0);
+				this.createBricks(location);
+			}
+
+			createBricks(location) {
+				for (let i = 0; i < Tetris.loacteTable[this.type][this.rotation].length; i++) {
+					let brickSize = new Point(30, 30);
+					let brickLocation = new Point(
+						location.x + Tetris.loacteTable[this.type][this.rotation][i][0],
+						location.y + Tetris.loacteTable[this.type][this.rotation][i][1]);
+					let brickPosition = this.gridSystem.getGrid(brickLocation).position;
+					let brickColor = Tetris.colorTable[this.type];
+					let brick = new Brick(brickPosition, brickSize, brickColor);
+					this.bricks.push(brick);
+					this.bricksLocation.push(brickLocation);
+				}
+			}
+
+			rotate(direction) {
+				let lastRotation = this.rotation;
+				let targetRotation = lastRotation;
+				if (lastRotation + direction >= Tetris.loacteTable[this.type].length) {
+					targetRotation = 0;
+				} else if (lastRotation + direction < 0) {
+					targetRotation = Tetris.loacteTable[this.type].length - 1;
+				} else {
+					targetRotation += direction;
+				}
+
+				let lastLocate = Tetris.loacteTable[this.type][lastRotation];
+				let targetLocate = Tetris.loacteTable[this.type][targetRotation];
+
+				// check can rotate.
+				let canRotate = true;
+				let targetBricksLocation = new Array(0);
+				for (let i = 0; i < this.bricks.length; i++) {
+					let targetBrickLocation = new Point(
+						this.bricksLocation[i].x + (targetLocate[i][0] - lastLocate[i][0]),
+						this.bricksLocation[i].y + (targetLocate[i][1] - lastLocate[i][1]));
+					let targetGrid = this.gridSystem.getGrid(targetBrickLocation);
+					if (targetGrid != undefined && targetGrid.brick == null) {
+						targetBricksLocation.push(targetBrickLocation);
+					} else {
+						canRotate = false;
+						break;
+					}
+				}
+
+				if (canRotate) {
+					for (let i = 0; i < targetBricksLocation.length; i++) {
+						let targetBrickLocation = targetBricksLocation[i];
+						this.bricksLocation[i] = targetBrickLocation;
+						let targetGrid = this.gridSystem.getGrid(this.bricksLocation[i]);
+						let brickPosition = targetGrid.position;
+						this.bricks[i].setPosition(brickPosition);
+					}
+					this.rotation = targetRotation;
+				}
+			}
+
+			move(direction) {
+				for (let i = 0; i < this.bricks.length; i++) {
+					this.bricksLocation[i] = new Point(
+						this.bricksLocation[i].x + direction.x,
+						this.bricksLocation[i].y + direction.y
+					);
+					this.bricks[i].setPosition(this.gridSystem.getGrid(this.bricksLocation[i]).position);
+				}
+			}
+
+			static allType = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+
+			static loacteTable = {
+				'I': [
+					[[0, 0], [0, -1], [0, -2], [0, -3]],
+					[[0, 0], [1, 0], [2, 0], [3, 0]],
+					[[0, 0], [0, -1], [0, -2], [0, -3]],
+					[[0, 0], [1, 0], [2, 0], [3, 0]]
+				],
+				'J': [
+					[[0, 0], [1, 0], [2, 0], [0, -1]],
+					[[0, -2], [0, -1], [0, 0], [1, -2]],
+					[[2, -1], [1, -1], [0, -1], [2, 0]],
+					[[2, 0], [2, -1], [2, -2], [1, 0]]
+				],
+				'L': [
+					[[0, 0], [1, 0], [2, 0], [2, -1]],
+					[[0, -2], [0, -1], [0, 0], [1, 0]],
+					[[2, -1], [1, -1], [0, -1], [0, 0]],
+					[[2, 0], [2, -1], [2, -2], [1, -2]]
+				],
+				'O': [
+					[[0, 0], [1, 0], [0, -1], [1, -1]],
+					[[0, -1], [0, 0], [1, -1], [1, 0]],
+					[[1, -1], [0, -1], [1, 0], [0, 0]],
+					[[1, 0], [1, -1], [0, 0], [0, -1]],
+				],
+				'S': [
+					[[0, 0], [1, 0], [1, -1], [2, -1]],
+					[[0, -2], [0, -1], [1, -1], [1, 0]],
+					[[0, 0], [1, 0], [1, -1], [2, -1]],
+					[[0, -2], [0, -1], [1, -1], [1, 0]]
+				],
+				'T': [
+					[[0, 0], [1, 0], [2, 0], [1, -1]],
+					[[0, -2], [0, -1], [0, 0], [1, -1]],
+					[[2, -1], [1, -1], [0, -1], [1, 0]],
+					[[2, 0], [2, -1], [2, -2], [1, -1]]
+				],
+				'Z': [
+					[[1, 0], [2, 0], [0, -1], [1, -1]],
+					[[0, -1], [0, 0], [1, -2], [1, -1]],
+					[[1, 0], [2, 0], [0, -1], [1, -1]],
+					[[0, -1], [0, 0], [1, -2], [1, -1]]
+				]
+			};
+
+			static colorTable = {
+				'I': '0x4287f5',
+				'J': '0x0043ad',
+				'L': '0xff7300',
+				'O': '0xfff700',
+				'S': '0x1eff00',
+				'T': '0x7a00fc',
+				'Z': '0xFF3300',
+			};
+		}
+
+		class Grid {
+			position;
+			brick;
+			constructor(position) {
+				this.position = position;
+			}
+		}
+
+		class GridSystem {
+			map;
+			size;
+			constructor(size) {
+				this.map = new Array(size.x);
+				this.size = size;
+				for (let i = 0; i < size.x; i++) {
+					this.map[i] = new Array(size.y);
+					for (let j = 0; j < size.y; j++) {
+						this.map[i][j] = new Grid(new Point(i * 30, j * 30));
+					}
+				}
+			}
+			getGrid(point) {
+				if (point.x <= -1 || point.x >= this.map.length)
+					return undefined;
+				if (point.y <= -1 || point.y >= this.map[point.x].length)
+					return undefined;
+				return this.map[point.x][point.y];
+			}
+			getSize() {
+				return this.size;
+			}
+		}
+
+		let style = new TextStyle({
+			fontFamily: "Arial",
+			fontSize: 36,
+			fill: "white",
+			stroke: '#ff3300',
+			strokeThickness: 4,
+			dropShadow: true,
+			dropShadowColor: "#000000",
+			dropShadowBlur: 4,
+			dropShadowAngle: Math.PI / 6,
+			dropShadowDistance: 6,
+		});
+		let score = 0;
+		let scoreText;
+		let brickLayer;
+		let uiLayer;
+		let gridSystem;
+		let state;
+		let tetris;
+		let speed = 1;
+		let mapW = parseInt(app.renderer.view.width / 30);
+		let mapH = parseInt(app.renderer.view.height / 30);
+		let time = 0;
+
+		this.setup();
+
+		function setup() {
+			//Capture the keyboard arrow keys
+			let left = keyboard(37),
+				right = keyboard(39),
+				down = keyboard(40),
+				x = keyboard(88),
+				z = keyboard(90),
+				space = keyboard(32);
+
+			//Left arrow key `press` method
+			left.press = () => {
+				let tetrisHit = checkTetrisHit(new Point(-1, 0));
+				if (!tetrisHit) {
+					tetris.move(new Point(-1, 0));
+				}
+			};
+
+			right.press = () => {
+				let tetrisHit = checkTetrisHit(new Point(1, 0));
+				if (!tetrisHit) {
+					tetris.move(new Point(1, 0));
+				}
+			};
+
+			down.press = () => {
+				let tetrisHitDown = checkTetrisHit(new Point(0, 1));
+				if (!tetrisHitDown) {
+					tetris.move(new Point(0, 1));
+				}
+			};
+
+			x.press = () => {
+				tetris.rotate(-1);
+			};
+
+			z.press = () => {
+				tetris.rotate(1);
+			};
+
+			space.press = () => {
+				let tetrisHitGround = checkingTetrisHitGround();
+				if (tetrisHitGround) {
+					turnFinish();
+				} else {
+					while (!tetrisHitGround) {
+						// tetris down.
+						tetris.move(new Point(0, 1));
+						// cheaking tetris hit down.
+						tetrisHitGround = checkingTetrisHitGround();
+						if (tetrisHitGround) {
+							turnFinish();
+							break;
+						}
+					}
+				}
+			};
+
+			//Set the game state
+			state = init;
+
+			//Start the game loop
+			app.ticker.add(this.gameLoop.bind(this));
+		}
+
+		function gameLoop(delta) {
+			state(delta);
+		}
+
+		function init(delta) {
+			brickLayer = app.stage.addChild(new Container());
+			brickLayer.name = 'brick';
+			uiLayer = app.stage.addChild(new Container());
+			uiLayer.name = 'ui';
+
+			gridSystem = new GridSystem(new Point(mapW, mapH));
+			pushTetrisArray();
+			createNewTetris();
+
+			scoreText = new Text("Score: " + score.toString(), style);
+			uiLayer.addChild(scoreText);
+
+			scoreText.position = new Point(10, 10);
+
+			state = play;
+		}
+
+		function updateScore(value) {
+			score = value;
+			scoreText.text = "Score: " + score.toString();
+		}
+
+		let tetrisArray = new Array(0);
+
+		function pushTetrisArray() {
+			let tetrisType = new Array(0);
+			tetrisType = tetrisType.concat(Tetris.allType);
+			let randomArray = new Array(0);
+
+			while (tetrisType.length != 0) {
+				let random = Math.floor(Math.random() * tetrisType.length);
+				let randomType = tetrisType[random];
+				randomArray.push(randomType);
+				tetrisType.splice(random, 1);
+			}
+
+			tetrisArray = tetrisArray.concat(randomArray);
+		}
+
+
+		let flag = true;
+		function lose(delta) {
+			if (flag) {
+				let restart = app.stage.addChild(new Container());
+				let bk = new Graphics();
+				bk.alpha = 0.4;
+				bk.beginFill(0x000000);
+				bk.drawRect(0, 0, app.renderer.view.width, app.renderer.view.height);
+				bk.endFill();
+				bk.position = new Point(0, 0);
+				restart.addChild(bk);
+				flag = false;
+			}
+		}
+
+		function play(delta) {
+			time += 1 / 60;
+			if (time >= 1 / speed) {
+				turnUpdate();
+				time = 0;
+			}
+		}
+
+		function turnUpdate() {
+			// checking tetris hit down.
+			if (checkingTetrisHitGround()) {
+				turnFinish();
+			} else {
+				// tetris down.
+				tetris.move(new Point(0, 1));
+			}
+		}
+
+		function turnFinish() {	// filling brick to grid.
+			fillTetrisToGrid();
+			// clear bricks and move bricks down.
+			let clearLines = 0;
+			for (let y = 0; y < gridSystem.getSize().y; y++) {
+				// checking bricks need to be clear.
+				if (checkingRowFilled(y)) {
+					// clear bricks.
+					removeRowBricks(y);
+					// bricks move down.
+					for (let k = y - 1; k >= 0; k--) {
+						moveRowBrick(k, k + 1);
+					}
+					// add clear line
+					clearLines += 1;
+				}
+			}
+			// add score
+			switch (clearLines) {
+				case 1:
+					updateScore(score + 100);
+					break;
+				case 2:
+					updateScore(score + 300);
+					break;
+				case 3:
+					updateScore(score + 600);
+					break;
+				case 4:
+					updateScore(score + 1000);
+					break;
+			}
+			// cheaking gameover.
+			if (!checkingGameOver()) {
+				// create new tetris.
+				createNewTetris();
+			}
+		}
+
+		function createNewTetris() {
+			tetris = new Tetris(tetrisArray[0], new Point(Math.floor(gridSystem.getSize().x / 2), 4), gridSystem);
+			tetrisArray.splice(0, 1);
+			if (tetrisArray.length <= Tetris.allType.length) {
+				pushTetrisArray();
+			}
+		}
+
+		function fillTetrisToGrid() {
+			bricks = tetris.bricks;
+			bricksLocation = tetris.bricksLocation;
+			for (let i = 0; i < bricks.length; i++) {
+				let brick = bricks[i];
+				let brickLocation = bricksLocation[i];
+				let grid = gridSystem.getGrid(brickLocation);
+				grid.brick = brick;
+			}
+		}
+
+		function checkingTetrisHitGround() {
+			return this.checkTetrisHit(new Point(0, 1));
+		}
+
+		function checkingRowFilled(index) {
+			let result = true;
+			for (let x = 0; x < gridSystem.getSize().x; x++) {
+				if (gridSystem.getGrid(new Point(x, index)).brick == undefined) {
+					result = false;
+					break;
+				}
+			}
+			return result;
+		}
+
+		function removeRowBricks(index) {
+			for (let x = 0; x < gridSystem.getSize().x; x++) {
+				let grid = gridSystem.getGrid(new Point(x, index));
+				grid.brick.destroy();
+				grid.brick = null;
+			}
+		}
+
+		function moveRowBrick(index, targetIndex) {
+			for (let x = 0; x < gridSystem.getSize().x; x++) {
+				let grid = gridSystem.getGrid(new Point(x, index));
+				if (grid.brick != undefined) {
+					let newGrid = gridSystem.getGrid(new Point(x, targetIndex));
+					grid.brick.setPosition(newGrid.position);
+					newGrid.brick = grid.brick;
+					grid.brick = null;
+				}
+			}
+		}
+
+		function checkingGameOver() {
+			let gameOver = false;
+			for (let i = 0; i < gridSystem.getSize().x; i++) {
+				let grid = gridSystem.getGrid(new Point(i, 4))
+				if (grid.brick != null) {
+					gameOver = true
+					break;
+				}
+			}
+
+			if (gameOver) {
+				state = lose;
+				return gameOver;
+			}
+			return gameOver;
+		}
+
+		function checkTetrisHit(direction) {
+			bricksLocation = tetris.bricksLocation;
+			for (let i = 0; i < bricksLocation.length; i++) {
+				let grid = gridSystem.getGrid(new Point(
+					bricksLocation[i].x + direction.x,
+					bricksLocation[i].y + direction.y
+				));
+				if (grid == undefined || grid.brick != null) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		function keyboard(keyCode) {
+			let key = {};
+			key.code = keyCode;
+			key.isDown = false;
+			key.isUp = true;
+			key.press = undefined;
+			key.release = undefined;
+			//The `downHandler`
+			key.downHandler = event => {
+				if (event.keyCode === key.code) {
+					if (key.isUp && key.press) key.press();
+					key.isDown = true;
+					key.isUp = false;
+				}
+				event.preventDefault();
+			};
+
+			//The `upHandler`
+			key.upHandler = event => {
+				if (event.keyCode === key.code) {
+					if (key.isDown && key.release) key.release();
+					key.isDown = false;
+					key.isUp = true;
+				}
+				event.preventDefault();
+			};
+
+			//Attach event listeners
+			window.addEventListener(
+				"keydown", key.downHandler.bind(key), false
+			);
+			window.addEventListener(
+				"keyup", key.upHandler.bind(key), false
+			);
+			return key;
+		}
+	</script>
+</body>
+
+</html>
