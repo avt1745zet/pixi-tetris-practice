@@ -248,19 +248,7 @@
 				return this.size;
 			}
 		}
-
-		let style = new TextStyle({
-			fontFamily: "Arial",
-			fontSize: 36,
-			fill: "white",
-			stroke: '#ff3300',
-			strokeThickness: 4,
-			dropShadow: true,
-			dropShadowColor: "#000000",
-			dropShadowBlur: 4,
-			dropShadowAngle: Math.PI / 6,
-			dropShadowDistance: 6,
-		});
+		let gameVersion = '1.0.0';
 		let score = 0;
 		let scoreText;
 		let brickLayer;
@@ -269,8 +257,9 @@
 		let state;
 		let tetris;
 		let speed = 1;
-		let mapW = parseInt(app.renderer.view.width / 30);
-		let mapH = parseInt(app.renderer.view.height / 30);
+		let sceneSize = new Point(app.renderer.view.width, app.renderer.view.height);
+		let mapW = parseInt(sceneSize.x / 30);
+		let mapH = parseInt(sceneSize.y / 30);
 		let time = 0;
 
 		this.setup();
@@ -349,16 +338,45 @@
 			uiLayer = app.stage.addChild(new Container());
 			uiLayer.name = 'ui';
 
+			createUIs();
+
 			gridSystem = new GridSystem(new Point(mapW, mapH));
 			pushTetrisArray();
 			createNewTetris();
 
-			scoreText = new Text("Score: " + score.toString(), style);
+			state = play;
+		}
+
+		function createUIs() {
+			let scoreTextStyle = new TextStyle({
+				fontFamily: "Arial",
+				fontSize: 36,
+				fill: "white",
+				stroke: '#ff3300',
+				strokeThickness: 4,
+				dropShadow: true,
+				dropShadowColor: "#000000",
+				dropShadowBlur: 4,
+				dropShadowAngle: Math.PI / 6,
+				dropShadowDistance: 6,
+			});
+			scoreText = new Text("Score: " + score.toString(), scoreTextStyle);
 			uiLayer.addChild(scoreText);
 
-			scoreText.position = new Point(10, 10);
-
-			state = play;
+			let versionTextStyle = new TextStyle({
+				fontFamily: "Arial",
+				fontSize: 12,
+				fill: "white",
+				strokeThickness: 4,
+				dropShadow: true,
+				dropShadowColor: "#000000",
+				dropShadowBlur: 4,
+				dropShadowAngle: Math.PI / 6,
+				dropShadowDistance: 6,
+			});
+			let versionText = new Text('Version: ' + gameVersion, versionTextStyle);
+			versionText.position = new Point(sceneSize.x - versionText.width, sceneSize.y - versionText.height);
+			uiLayer.addChild(versionText);
 		}
 
 		function updateScore(value) {
